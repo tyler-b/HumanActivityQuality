@@ -1,0 +1,159 @@
+---
+title: "Predicting Human Motion Activity"
+author: "Tyler Brown"
+date: "May 11, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Synopsis
+
+The quantified-self movement has exploded in the past decade. One use of bodily motion data is to identify the quality with which a person is performing a movement. This paper looks at the possibility of predicting human motion patterns from accelerometer data. Machine Learning algorithms are used to predict which category of motion is being performed. A random forest approach achieved a greater than 0.995 accuracy. However, this method is not computationally efficient, so there is room for improvement to the prediction model.
+
+## Introduction
+
+The quantified-self movement has exploded in the past decade. This allows for collecting bodily movement information inexpensively and unobtrusively. A novel idea is to use the data to identify if a person is performing a movement correctly or not, then allowing for feedback to improve the motion. This approach and data set were made available by the Velloso, E., et. al team at http://groupware.les.inf.puc-rio.br/har.
+
+## Data Analysis
+
+### Data Source
+
+The data was originally sourced from the Velloso, E., et. al team at http://groupware.les.inf.puc-rio.br/har. It was partioned by the Practice Machine Learning Coursera course, which provides the download site.
+
+### Download and Load Data
+
+```{r, message=FALSE, warning=FALSE}
+# Load Libraries
+library(caret)
+library(parallel)
+library(doParallel)
+```
+
+
+```{r}
+# Download Data Sets and Read csv files of data sets
+url1 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+url2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+if (!file.exists("pml-training.csv")) download.file(url1, "pml-training.csv", mode = "wb")
+if (!file.exists("pml-testing.csv")) download.file(url2, "pml-testing.csv", mode = "wb")
+rm(url1, url2)
+train <- read.csv("pml-training.csv", na.strings = c("", "NA"))
+test <- read.csv("pml-testing.csv", na.strings = c("", "NA"))
+```
+
+### Tidy Data
+
+```{r}
+summarycols <- colSums(is.na(train)) > 0
+train <- train[,!summarycols]
+testdata <- test[,!summarycols]
+```
+
+It is clear that the data consists of individual time series during which movement is performed, and then there are summary statistics that are performed on each time 'window'. The summary columns of the data can be found by looking at columns with many NA values. The summary columns are removed from the training data becuase (1) there are no corresponding values in the test data set to predict on, and (2) incorporating them into the model would take large amounts of effort for an uncertain payoff.
+
+Also, columns 1:7 of the training data set will not be used because they represent data labels. Those columns would either provide no value to the prediction or be a detriment to the prediction task.
+
+
+### Explore Regressors
+
+Multiple techniques will be used to explore the large number of regressors. As there are $`r ncol(train[,8:59])`$ regressors, this analysis will focus on which regressors are necessary and which can be ignored.
+
+### Explore Regressors - Correlations
+
+```{r}
+# Correlation analysis on Regressors
+correlations <- cor(train[,8:59])
+correlations <- correlations[lower.tri(correlations)]
+percentcorrelated <- sum( abs(correlations) > 0.70 ) / length(correlations)
+hist(correlations)
+```
+
+An analysis of correlations is presented above that aims to find if there are regressors that are highly correlated. The proportion of regressor combinations that are correlated (abs(cor) > 0.70) is $`r round(sum( abs(correlations) > 0.70 ) / length(correlations),4)`$. The number of regressor combinations that are highly correlated (abs(cor) > 0.95 ) is $`r sum( abs(correlations) > 0.95 )`$. These combination of regressors provide a clue to which regressors may be omitted.
+
+### Explore Regressors - Principal Component Analysis
+
+```{r}
+# PCA Analysis on Regressors
+pca <- prcomp(train[,8:59])
+plot(pca, type = "l")
+pcasummary <- summary(pca)$importance
+pcasummary[,1:10]
+```
+
+Principal Component Analysis is performed to assess whether a basis change of the regressors could potentially make the analysis run more computationally efficient. The PCA analysis is performed above and the variances are plotted against the principal component number. The plot shows that much of the variability can be explained by just 9 principal components. This compares favorably with instead having to analyze the entire group of 52 regressors. When using the 'train' function in caret and passing it the "pca" preprocessing obtion, it uses enough principal components to account for 0.95 of the variability. This is a potential option that will be explored to make the analysis more computationally efficient.
+
+### Train Models
+
+With all of the exploration completed, the machine learning (ML) models are now trained to the data. It is important to note that since the response variable $classe$ is a five level factor variable, that limits our choice of ML models. It is not desired to create dummy variables for the response and then fit a 0/1 classifier to the data. Therefore, the models consisdered will be constrained to linear discriminate analysis (LDA) and random forests (RF).
+
+#### Model 1 - LDA with PCA
+
+First, an LDA model is trained where the regressors are preprocessed with principle component analysis (PCA). The method only uses principal components that comprise 95% of the variability of the regressors. Also, cross-validation is implemented to estimate the out-of-sample error. The results of the fit model give an accuracy of 0.527 and a kappa value of 0.400. This is considered unacceptable accuracy, therefore another model is fit.
+
+```{r, message=FALSE, warning=FALSE, cache=TRUE}
+# Fit 1 LDA with PCA
+cluster <- makeCluster(detectCores() - 1)
+registerDoParallel(cluster)
+fitControl <- trainControl(method = "cv",
+                           number = 10,
+                           repeats = 15,
+                           allowParallel = TRUE)
+fit1 <- train(classe ~., data = train[,8:60], method = "lda", trControl = fitControl, preProcess = "pca")
+stopCluster(cluster)
+fit1
+```
+
+
+#### Model 2 - LDA
+
+Secondly, another LDA model is trained to the data, however without using PCA. All of the other options are identical. This will explain how the accuracy is affected by the PCA preprocessing. The results of the fit model give an accuracy of 0.702 and a kappa value of 0.623. The removal of the PCA preprocessing definately improved the accuracy. However, this is still considered unacceptable accuracy, therefore another model is fit.
+
+```{r, cache=TRUE}
+cluster <- makeCluster(detectCores() - 1)
+registerDoParallel(cluster)
+fitControl <- trainControl(method = "cv",
+                           number = 10,
+                           repeats = 15,
+                           allowParallel = TRUE)
+fit2 <- train(classe ~., data = train[,8:60], method = "lda", trControl = fitControl)
+stopCluster(cluster)
+fit2
+```
+
+
+#### Model 3 - RF
+
+Next, a random forest model is trained to the data. This approach is known to have higher accuracy, though at the expense of computational time. The cross-validation option is utilized to estimate the out-of-sample error. This model results in very high accuracy 0.996 and a kappa value of 0.994. This is considered extremely good performance and thus will be used for the prediction portion.
+
+```{r, message=FALSE, warning=FALSE, cache=TRUE}
+cluster <- makeCluster(detectCores() - 1)
+registerDoParallel(cluster)
+fitControl <- trainControl(method = "cv",
+                           number = 10,
+                           repeats = 15,
+                           allowParallel = TRUE)
+fit3 <- train(classe ~., data = train[,8:60], method = "rf", trControl = fitControl)
+stopCluster(cluster)
+fit3
+```
+
+
+### Predictions
+
+Using the accepted random forest model, the predictions for the test set are made.
+
+```{r}
+predictions <- predict(fit3, newdata = testdata[,8:59])
+predictions
+```
+
+### Cross Validation and Estimating Out-of-Sample Error
+
+Since the cross validation method was utilized, the model fits already took into consideration an estimate of the out-of-sample error. Because cross validation uses a portion of the data to train and a portion of the data to validate it is a robust technique to estimate out-of-sample error. 10-fold cross validation was performed which on this large size of data set, should be robust. Therefore, considering the random forest model was accepted, the out-of-sample error rate can be estimated to be 0.99.
+
+## Conclusion
+
+The quantified-self movement has exploded in the past decade. One use of bodily motion data is to identify the quality with which a person is performing a movement. This paper looks at the possibility of predicting human motion patterns from accelerometer data. Machine Learning algorithms are used to predict which category of motion is being performed. A random forest approach achieved a greater than 0.995 accuracy. However, this method is not computationally efficient, so there is room for improvement to the prediction model. The approach used in this paper is illuminating because it shows that a single data point out of a time-series of human motion data can be used to predict the activity that is occuring.
