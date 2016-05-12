@@ -205,10 +205,8 @@ fitControl &lt;- trainControl(method = &quot;cv&quot;,
                            number = 10,
                            repeats = 15,
                            allowParallel = TRUE)
-fit1 &lt;- train(classe ~., data = train[,8:60], method = &quot;lda&quot;, trControl = fitControl, preProcess = &quot;pca&quot;)</code></pre>
-<pre><code>## Loading required package: MASS</code></pre>
-<pre><code>## Warning: package 'MASS' was built under R version 3.2.5</code></pre>
-<pre class="r"><code>stopCluster(cluster)
+fit1 &lt;- train(classe ~., data = train[,8:60], method = &quot;lda&quot;, trControl = fitControl, preProcess = &quot;pca&quot;)
+stopCluster(cluster)
 fit1</code></pre>
 <pre><code>## Linear Discriminant Analysis 
 ## 
@@ -219,11 +217,11 @@ fit1</code></pre>
 ## Pre-processing: principal component signal extraction (52), centered
 ##  (52), scaled (52) 
 ## Resampling: Cross-Validated (10 fold) 
-## Summary of sample sizes: 17660, 17659, 17660, 17660, 17659, 17660, ... 
+## Summary of sample sizes: 17661, 17659, 17659, 17659, 17661, 17658, ... 
 ## Resampling results:
 ## 
 ##   Accuracy   Kappa    
-##   0.5256336  0.3990552
+##   0.5264479  0.4001485
 ## 
 ## </code></pre>
 </div>
@@ -264,17 +262,8 @@ fitControl &lt;- trainControl(method = &quot;cv&quot;,
                            number = 10,
                            repeats = 15,
                            allowParallel = TRUE)
-fit3 &lt;- train(classe ~., data = train[,8:60], method = &quot;rf&quot;, trControl = fitControl)</code></pre>
-<pre><code>## Loading required package: randomForest</code></pre>
-<pre><code>## Warning: package 'randomForest' was built under R version 3.2.5</code></pre>
-<pre><code>## randomForest 4.6-12</code></pre>
-<pre><code>## Type rfNews() to see new features/changes/bug fixes.</code></pre>
-<pre><code>## 
-## Attaching package: 'randomForest'</code></pre>
-<pre><code>## The following object is masked from 'package:ggplot2':
-## 
-##     margin</code></pre>
-<pre class="r"><code>stopCluster(cluster)
+fit3 &lt;- train(classe ~., data = train[,8:60], method = &quot;rf&quot;, trControl = fitControl)
+stopCluster(cluster)
 fit3</code></pre>
 <pre><code>## Random Forest 
 ## 
